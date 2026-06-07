@@ -40,6 +40,124 @@ Or add the dependency directly to `Packages/manifest.json`:
 
 ## Usage
 
+The toolkit has two layers. The **high-level layer** (`AddressablesToolkitSettings` +
+`AddressablesService` + `AssetScope`) is the recommended way to wire Addressables into a real
+project: configure one asset, initialize once, then load/instantiate through lifetime-bound
+scopes that release themselves. The **low-level tools** below it (`AssetLoader`, `AddressablePool`,
+`DownloadHelper`, …) remain available when you want direct control.
+
+### Quick start
+
+```csharp
+using KidzDev.AddressablesToolkit;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+
+public class Boot : MonoBehaviour
+{
+    private async UniTaskVoid Start()
+    {
+        // 1) Initialize from the settings asset (CDN override → init → catalog → preload).
+        if (!await AddressablesService.InitializeAsync())
+            return;
+
+        // 2) Load/instantiate through a scope bound to this GameObject's lifetime.
+        //    Destroying this object releases everything — no manual cleanup.
+        var scope = this.GetAssetScope();
+        var hero = await scope.InstantiateAsync("hero-prefab", parent: transform);
+    }
+}
+```
+
+### AddressablesToolkitSettings — one configuration asset
+
+A `ScriptableObject` that drives the whole flow. Create it via **Tools > Addressables Toolkit >
+Settings** (it lands in `Assets/Resources/` so it loads automatically at runtime in any project).
+
+- **Content source** — `Local` (bundles ship in the player; CDN/catalog/download steps are skipped)
+  or `Remote` (content fetched from a CDN).
+- **Override remote URL** — when on, installs an `AddressableCdn` `WebRequestOverride` onto the
+  active environment's CDN; when off, uses the URLs baked into your Addressables profile.
+- **Environments** — a list of named CDN targets (`dev`, `staging`, `production`, or any you add).
+  The active one is chosen by `activeEnvironment`, overridable at runtime via
+  `AddressablesToolkitSettings.EnvironmentOverride` or the `ADDRESSABLES_ENV` variable (CI/editor).
+- **Content version / platform folder** — appended to the CDN URL; empty = `Application.version` /
+  auto-detected platform.
+- **Preload labels** — labels/addresses to predownload during initialization.
+- **Initialization flow** — `autoInitializeOnLaunch`, `checkCatalogUpdates`,
+  `predownloadPreloadContent`, plus `verboseLogging`.
+
+```csharp
+// Point the same build at a different backend before initializing:
+AddressablesToolkitSettings.EnvironmentOverride = "staging";
+```
+
+### AddressablesService — initialization flow
+
+Takes Addressables from launch to ready, driven by the settings asset. Calls are **idempotent**
+and join a single in-flight initialization, so any system can `await` it before touching content.
+
+```csharp
+using System;
+using KidzDev.AddressablesToolkit;
+
+// Drive a loading screen from state transitions.
+AddressablesService.StateChanged += s => Debug.Log($"State → {s}"); // Initializing → … → Ready
+
+var progress = new Progress<DownloadProgress>(p => Debug.Log($"{p.Percent:P0}"));
+bool ready = await AddressablesService.InitializeAsync(
+    progress: progress,
+    confirm: bytes => ShowConfirmPopupAsync(bytes)); // return UniTask<bool>
+
+if (!ready)
+{
+    // Inspect why (declined download, offline, error, cancelled):
+    Debug.LogError(AddressablesService.LastDownloadResult.Outcome);
+}
+
+bool isReady = AddressablesService.IsReady;
+AddressablesService.Reset(); // re-run the flow later (does not release loaded assets)
+```
+
+For Local content or simple/dev projects, set `autoInitializeOnLaunch` and the service initializes
+itself before the first scene. For a remote flow with a download UI, call `InitializeAsync` yourself
+from your loading screen so you can pass `progress`/`confirm`.
+
+### AssetScope — leak-proof load / instantiate / release
+
+The memory-safety centerpiece: a disposable owner that tracks everything you load, instantiate, or
+pool, and releases it all on `Dispose`. Bind it to a GameObject with `this.GetAssetScope()` and it
+disposes automatically on destroy — so assets can't outlive the object that needed them. Works with
+a plain **key or an `AssetReference`** everywhere.
+
+```csharp
+public class Hud : MonoBehaviour
+{
+    [SerializeField] private AssetReferenceSprite coinIcon;
+
+    private async UniTaskVoid Start()
+    {
+        var scope = this.GetAssetScope(); // released automatically when this object is destroyed
+
+        Sprite icon   = await scope.LoadAsync<Sprite>(coinIcon);          // by AssetReference
+        Sprite banner = await scope.LoadAsync<Sprite>("ui_banner");       // by key
+        GameObject fx = await scope.InstantiateAsync("vfx_explosion");    // released on dispose
+        GameObject e  = await scope.SpawnPooledAsync("enemy");            // returned to pool on dispose
+
+        // Optional early release of one item:
+        scope.ReleaseInstance(fx);
+    }
+}
+```
+
+For a lifetime you control yourself (a screen, a flow), `new AssetScope()` and `using`/`Dispose`:
+
+```csharp
+using var scope = new AssetScope();
+var config = await scope.LoadAsync<TextAsset>("level_config");
+// ... everything released when the using-block exits ...
+```
+
 ### AssetLoader — reference-counted async loading
 
 ```csharp
@@ -230,7 +348,10 @@ Pass `-aaProfile <ProfileName>` to switch the active Addressables profile before
 
 ## Samples
 
-Open **Window > Package Manager**, select *KidzDev Addressables Toolkit*, then import **Demo** from the **Samples** tab. It demonstrates `AssetLoader`, `AddressablePool`, `DownloadHelper`, and `RemoteContentUpdater` together.
+Open **Window > Package Manager**, select *KidzDev Addressables Toolkit*, then import **Demo** from the **Samples** tab. It contains two scripts:
+
+- `AddressablesBootstrapDemo` — the recommended high-level flow: `AddressablesService.InitializeAsync` driven by the settings asset, then load/instantiate/pool through a GameObject-bound `AssetScope` that auto-releases on destroy.
+- `AddressablesToolkitDemo` — the low-level tools (`AssetLoader`, `AddressablePool`, `DownloadHelper`, `RemoteContentUpdater`) used directly.
 
 ## License
 

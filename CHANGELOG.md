@@ -5,6 +5,28 @@ All notable changes to this package are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-07
+
+A high-level layer that turns the toolkit's individual utilities into a drop-in
+initialize-then-use flow for real projects. No breaking changes to existing APIs.
+
+### Added
+
+- `AddressablesToolkitSettings`: one `ScriptableObject` (loaded from `Resources`) for content
+  source (Local/Remote), CDN-override toggle, named remote environments (dev/staging/production/
+  any), content version + platform overrides, preload labels, and init-flow toggles. Environment
+  is overridable at runtime via `EnvironmentOverride` or the `ADDRESSABLES_ENV` variable
+- `AddressablesService`: settings-driven initialization flow (CDN install → `InitializeAsync` →
+  catalog update → preload download → `Ready`) with an `AddressablesState` machine, `StateChanged`
+  event, idempotent/joined calls, threaded cancellation, and optional `autoInitializeOnLaunch`
+- `AssetScope`: disposable, lifetime-bound owner for leak-proof load/instantiate/pool/release —
+  accepts a key or an `AssetReference`; `this.GetAssetScope()` binds one to a GameObject so it
+  releases automatically on destroy (via `AssetScopeBinder` / `AssetScopeExtensions`)
+- `AssetLoader.Release(object key, Type type)`: non-generic release used by `AssetScope`
+- Editor: **Tools > Addressables Toolkit > Settings** creates/locates the settings asset
+- Sample: `AddressablesBootstrapDemo` (minimal high-level flow) and `AddressablesToolkitFullDemo`
+  (interactive IMGUI tour of init + scope load/instantiate/pool/release, no scene assets required)
+
 ## [1.0.1] - 2026-06-07
 
 Integrates the lessons and capabilities of two shipping Addressables systems

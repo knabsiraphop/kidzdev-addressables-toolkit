@@ -88,6 +88,17 @@ namespace KidzDev.AddressablesToolkit
         public static void Release<T>(object key) where T : UnityEngine.Object
             => Release(new CacheKey(key, typeof(T)));
 
+        /// <summary>
+        /// Non-generic release of one borrow of (key, type). Lets callers that only know the
+        /// asset's <see cref="Type"/> at runtime (e.g. <see cref="AssetScope"/>) release without
+        /// reflecting over the generic overload.
+        /// </summary>
+        public static void Release(object key, Type type)
+        {
+            if (type == null) throw new ArgumentNullException(nameof(type));
+            Release(new CacheKey(key, type));
+        }
+
         private static void Release(CacheKey cacheKey)
         {
             if (!_cache.TryGetValue(cacheKey, out var entry))
