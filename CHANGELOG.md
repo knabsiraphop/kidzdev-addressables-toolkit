@@ -5,6 +5,35 @@ All notable changes to this package are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-06-13
+
+Expands the Demo sample into a full tour of every public API, and fixes a `ComponentReference<T>`
+instance leak.
+
+### Added
+
+- Demo sample: `demo-atlas.png` — a 4-sprite sheet (Sprite mode **Multiple**: `icon`, `icon_missing`,
+  `star`, `heart`) that drives the new `SpriteAtlasLoader` section via the `demo-atlas[icon]`
+  sub-object key convention — and `demo-scene.unity`, a tiny additive scene the `SceneLoader` section
+  loads/unloads. Committed `.meta` files keep their references stable across imports.
+
+### Changed
+
+- Demo sample: `AddressablesToolkitFullDemo` reworked from a high-level-flow demo into a scrollable
+  IMGUI tour that wires **every public API** in the toolkit to a button — added sections for
+  `AssetLoader`/`AssetLocator`, `AddressablePool`, `ComponentReference<T>`, `SpriteAtlasLoader`,
+  `SceneLoader`, and the full remote stack (`ContentDownloader`, `CatalogUpdater`,
+  `RemoteContentUpdater`, `AddressableCdn`), plus a settings readout and runtime overrides. The
+  `prefabReference`/`componentReference` fields come pre-wired to `demo-prefab`, and the sample README
+  documents marking the four demo assets addressable.
+
+### Fixed
+
+- `ComponentReference<T>.ReleaseInstance` now actually destroys the instance. `InstantiateComponentAsync`
+  wraps the instantiation in a chain operation that holds its own reference, so calling
+  `Addressables.ReleaseInstance` alone left the instance at a non-zero ref count — it was never
+  destroyed and every instantiate leaked a clone. `ReleaseInstance` now releases the chain handle too.
+
 ## [1.3.0] - 2026-06-12
 
 Production-hardening pass: fixes from a full audit of v1.2.0, locked in by new test assemblies.

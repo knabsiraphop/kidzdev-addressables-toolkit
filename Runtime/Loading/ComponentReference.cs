@@ -37,10 +37,21 @@ namespace KidzDev.AddressablesToolkit
             => Addressables.ResourceManager.CreateChainOperation(base.InstantiateAsync(parent), ToComponent);
 
         /// <summary>Release an instance created via InstantiateComponentAsync.</summary>
+        /// <remarks>
+        /// <see cref="InstantiateComponentAsync"/> wraps the instantiation in a chain operation, which
+        /// holds its own reference to the underlying instance operation. Releasing only the instance
+        /// (<see cref="Addressables.ReleaseInstance(GameObject)"/>) leaves that chain reference, so the
+        /// instance never reaches zero refs and is never destroyed. We therefore drop the instance
+        /// <b>and</b> release the chain handle. Pass the handle returned by
+        /// <see cref="InstantiateComponentAsync"/>.
+        /// </remarks>
         public void ReleaseInstance(AsyncOperationHandle<TComponent> handle)
         {
-            if (handle.IsValid() && handle.Result != null)
+            if (!handle.IsValid())
+                return;
+            if (handle.Result != null)
                 Addressables.ReleaseInstance(handle.Result.gameObject);
+            Addressables.Release(handle);
         }
 
         private AsyncOperationHandle<TComponent> ToComponent(AsyncOperationHandle<GameObject> handle)
